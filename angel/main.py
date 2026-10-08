@@ -329,5 +329,99 @@ def update_module(
     
     console.print(f"[green]✔ Módulo {target_file.name} actualizado al commit {head_sha[:7]}[/green]")
 
+@app.command(name="scan")
+def scan_project():
+    """
+    Escanea el repositorio actual e infiere el stack tecnológico para configurar perfil.yaml
+    """
+    import yaml
+    import json
+    
+    target_dir = Path.cwd()
+    perfil_path = target_dir / ".angel" / "perfil.yaml"
+    
+    if not perfil_path.exists():
+        console.print("[red]Angel no está inicializado. Ejecuta 'angel init' primero.[/red]")
+        raise typer.Exit(code=1)
+        
+    stack_backend = []
+    stack_frontend = []
+    package_managers = []
+    
+    # Detección de Node.js / Frontend
+    if (target_dir / "package.json").exists():
+        package_managers.append("npm/yarn/pnpm")
+        try:
+            with open(target_dir / "package.json", "r", encoding="utf-8") as f:
+                pkg = json.load(f)
+                deps = {**pkg.get("dependencies", {}), **pkg.get("devDependencies", {})}
+                if "react" in deps:
+                    stack_frontend.append("React")
+                if "vue" in deps:
+                    stack_frontend.append("Vue")
+                if "next" in deps:
+                    stack_frontend.append("Next.js")
+                if "typescript" in deps:
+                    stack_frontend.append("TypeScript")
+                if "tailwindcss" in deps:
+                    stack_frontend.append("Tailwind CSS")
+        except Exception:
+            stack_frontend.append("Node.js (Desconocido)")
+            
+    # Detección de Python
+    if (target_dir / "requirements.txt").exists() or (target_dir / "pyproject.toml").exists():
+        package_managers.append("pip/poetry/hatch")
+        stack_backend.append("Python")
+        if (target_dir / "pyproject.toml").exists():
+            content = (target_dir / "pyproject.toml").read_text(encoding="utf-8").lower()
+            if "fastapi" in content:
+                stack_backend.append("FastAPI")
+            if "django" in content:
+                stack_backend.append("Django")
+            if "flask" in content:
+                stack_backend.append("Flask")
+            if "typer" in content:
+                stack_backend.append("Typer CLI")
+                
+    # Detección de Go
+    if (target_dir / "go.mod").exists():
+        package_managers.append("go mod")
+        stack_backend.append("Go")
+        content = (target_dir / "go.mod").read_text(encoding="utf-8").lower()
+        if "gin-gonic" in content:
+            stack_backend.append("Gin")
+        if "gorm" in content:
+            stack_backend.append("GORM")
+            
+    # Leer el YAML actual
+    try:
+        with open(perfil_path, "r", encoding="utf-8") as f:
+            perfil = yaml.safe_load(f) or {}
+    except Exception:
+        perfil = {}
+        
+    if "stack" not in perfil:
+        perfil["stack"] = {"backend": [], "frontend": [], "package_managers": []}
+        
+    perfil["stack"]["backend"] = list(set(perfil["stack"].get("backend", []) + stack_backend))
+    perfil["stack"]["frontend"] = list(set(perfil["stack"].get("frontend", []) + stack_frontend))
+    perfil["stack"]["package_managers"] = list(set(perfil["stack"].get("package_managers", []) + package_managers))
+    
+    with open(perfil_path, "w", encoding="utf-8") as f:
+        yaml.dump(perfil, f, allow_unicode=True, sort_keys=False)
+        
+    console.print("[green]✔ Escaneo completado. Stack detectado:[/green]")
+    if stack_backend:
+        console.print(f"  - Backend: {', '.join(stack_backend)}")
+    if stack_frontend:
+        console.print(f"  - Frontend: {', '.join(stack_frontend)}")
+    if package_managers:
+        console.print(f"  - Paquetes: {', '.join(package_managers)}")
+    
+    if not (stack_backend or stack_frontend or package_managers):
+         console.print("  - [yellow]No se detectaron frameworks conocidos.[/yellow]")
+         
+    console.print("\n[cyan]El archivo .angel/perfil.yaml ha sido actualizado.[/cyan]")
+
 if __name__ == "__main__":
     app()
