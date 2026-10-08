@@ -49,6 +49,7 @@ def status(
     Muestra el estado actual del proyecto (tareas activas y estado de módulos).
     """
     import yaml
+    import subprocess
     from rich.table import Table
 
     target_dir = Path.cwd() / ".angel"
@@ -80,27 +81,77 @@ def status(
             console.print("[cyan]No hay tareas registradas en .angel/tareas/.[/cyan]")
         else:
             console.print("[green]No hay tareas pendientes. ¡Todo al día![/green]")
-        return
+    else:
+        table = Table(title="Estado de Tareas (Angel)")
+        table.add_column("ID", style="cyan", no_wrap=True)
+        table.add_column("Tipo", style="magenta")
+        table.add_column("Estado", style="bold")
+        table.add_column("Título")
 
-    table = Table(title="Estado de Tareas (Angel)")
-    table.add_column("ID", style="cyan", no_wrap=True)
-    table.add_column("Tipo", style="magenta")
-    table.add_column("Estado", style="bold")
-    table.add_column("Título")
+        # Ordenar por ID
+        for t in sorted(tareas, key=lambda x: str(x.get("id", ""))):
+            estado = str(t.get("status", "N/A")).lower()
+            color = "green" if estado == "activa" else ("yellow" if estado == "pausada" else ("red" if estado == "bloqueada" else "white"))
+            
+            table.add_row(
+                str(t.get("id", "N/A")),
+                str(t.get("type", "N/A")),
+                f"[{color}]{estado}[/{color}]",
+                str(t.get("title", "N/A"))
+            )
+            
+        console.print(table)
 
-    # Ordenar por ID
-    for t in sorted(tareas, key=lambda x: str(x.get("id", ""))):
-        estado = str(t.get("status", "N/A")).lower()
-        color = "green" if estado == "activa" else ("yellow" if estado == "pausada" else ("red" if estado == "bloqueada" else "white"))
+    # REVISIÓN DE MÓDULOS
+    modulos_dir = target_dir / "modulos"
+    modulos = []
+    if modulos_dir.exists():
+        for md_file in modulos_dir.glob("*.md"):
+            try:
+                content = md_file.read_text(encoding="utf-8")
+                if content.startswith("---"):
+                    parts = content.split("---", 2)
+                    if len(parts) >= 3:
+                        frontmatter = yaml.safe_load(parts[1])
+                        if frontmatter:
+                            modulos.append((md_file.name, frontmatter))
+            except Exception:
+                pass
+                
+    if modulos:
+        table_mod = Table(title="Estado de Módulos de Memoria")
+        table_mod.add_column("Módulo", style="cyan")
+        table_mod.add_column("Estado Git", style="bold")
+        table_mod.add_column("Último SHA", style="dim")
         
-        table.add_row(
-            str(t.get("id", "N/A")),
-            str(t.get("type", "N/A")),
-            f"[{color}]{estado}[/{color}]",
-            str(t.get("title", "N/A"))
-        )
-        
-    console.print(table)
+        for filename, m in modulos:
+            git_sha = m.get("git_sha", "")
+            paths = m.get("paths_covered", [])
+            estado = "Vigente"
+            color = "green"
+            
+            if git_sha and git_sha != "HEAD" and paths:
+                try:
+                    # git diff --quiet <sha>..HEAD -- <paths>
+                    cmd = ["git", "diff", "--quiet", f"{git_sha}..HEAD", "--"] + paths
+                    res = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    if res.returncode != 0:
+                        estado = "Obsoleto (Cambios detectados)"
+                        color = "red"
+                except Exception:
+                    estado = "Error validando Git"
+                    color = "yellow"
+            elif git_sha == "HEAD":
+                estado = "Sin inicializar (SHA = HEAD)"
+                color = "yellow"
+                
+            table_mod.add_row(
+                m.get("module_name", filename),
+                f"[{color}]{estado}[/{color}]",
+                git_sha[:7] if len(git_sha)>=7 else git_sha
+            )
+        console.print("")
+        console.print(table_mod)
 
 @app.command(name="new-task")
 def new_task(
@@ -238,6 +289,45 @@ Instrucción: Confirma que entiendes el objetivo y sugiere el siguiente paso té
 [FIN DE HANDOFF]"""
     
     console.print(Panel(handoff_text, title="Copia y pega este texto en tu nuevo LLM", border_style="blue"))
+
+@app.command(name="update-module")
+def update_module(
+    module_name: str = typer.Argument(..., help="Nombre del archivo del módulo (ej. autenticacion)")
+):
+    """
+    Actualiza el git_sha de un módulo al commit actual (HEAD).
+    """
+    import subprocess
+    import re
+    
+    target_dir = Path.cwd() / ".angel"
+    modulos_dir = target_dir / "modulos"
+    
+    if not modulos_dir.exists():
+        console.print("[red]Angel no está inicializado o falta carpeta modulos.[/red]")
+        raise typer.Exit(code=1)
+        
+    target_file = None
+    for md_file in modulos_dir.glob("*.md"):
+        if module_name.lower() in md_file.name.lower():
+            target_file = md_file
+            break
+            
+    if not target_file:
+        console.print(f"[red]No se encontró el módulo {module_name}[/red]")
+        raise typer.Exit(code=1)
+        
+    try:
+        head_sha = subprocess.check_output(["git", "rev-parse", "HEAD"]).decode().strip()
+    except Exception:
+        console.print("[red]No se pudo obtener el commit actual. ¿Estás en un repo Git?[/red]")
+        raise typer.Exit(code=1)
+        
+    content = target_file.read_text(encoding="utf-8")
+    new_content = re.sub(r'git_sha:\s*".*"', f'git_sha: "{head_sha}"', content)
+    target_file.write_text(new_content, encoding="utf-8")
+    
+    console.print(f"[green]✔ Módulo {target_file.name} actualizado al commit {head_sha[:7]}[/green]")
 
 if __name__ == "__main__":
     app()
