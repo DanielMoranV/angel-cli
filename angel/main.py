@@ -349,10 +349,12 @@ def scan_project():
     package_managers = []
     
     # Detección de Node.js / Frontend
-    if (target_dir / "package.json").exists():
+    for pkg_path in target_dir.rglob("package.json"):
+        if "node_modules" in pkg_path.parts:
+            continue
         package_managers.append("npm/yarn/pnpm")
         try:
-            with open(target_dir / "package.json", "r", encoding="utf-8") as f:
+            with open(pkg_path, "r", encoding="utf-8") as f:
                 pkg = json.load(f)
                 deps = {**pkg.get("dependencies", {}), **pkg.get("devDependencies", {})}
                 if "react" in deps:
@@ -366,28 +368,36 @@ def scan_project():
                 if "tailwindcss" in deps:
                     stack_frontend.append("Tailwind CSS")
         except Exception:
-            stack_frontend.append("Node.js (Desconocido)")
+            pass
+
+    if not stack_frontend and "npm/yarn/pnpm" in package_managers:
+        stack_frontend.append("Node.js")
             
     # Detección de Python
-    if (target_dir / "requirements.txt").exists() or (target_dir / "pyproject.toml").exists():
-        package_managers.append("pip/poetry/hatch")
+    for req_path in target_dir.rglob("requirements.txt"):
+        if "venv" in req_path.parts or ".venv" in req_path.parts:
+            continue
+        package_managers.append("pip")
         stack_backend.append("Python")
-        if (target_dir / "pyproject.toml").exists():
-            content = (target_dir / "pyproject.toml").read_text(encoding="utf-8").lower()
-            if "fastapi" in content:
-                stack_backend.append("FastAPI")
-            if "django" in content:
-                stack_backend.append("Django")
-            if "flask" in content:
-                stack_backend.append("Flask")
-            if "typer" in content:
-                stack_backend.append("Typer CLI")
+
+    for pyproject_path in target_dir.rglob("pyproject.toml"):
+        package_managers.append("poetry/hatch")
+        stack_backend.append("Python")
+        content = pyproject_path.read_text(encoding="utf-8").lower()
+        if "fastapi" in content:
+            stack_backend.append("FastAPI")
+        if "django" in content:
+            stack_backend.append("Django")
+        if "flask" in content:
+            stack_backend.append("Flask")
+        if "typer" in content:
+            stack_backend.append("Typer CLI")
                 
     # Detección de Go
-    if (target_dir / "go.mod").exists():
+    for go_path in target_dir.rglob("go.mod"):
         package_managers.append("go mod")
         stack_backend.append("Go")
-        content = (target_dir / "go.mod").read_text(encoding="utf-8").lower()
+        content = go_path.read_text(encoding="utf-8").lower()
         if "gin-gonic" in content:
             stack_backend.append("Gin")
         if "gorm" in content:
