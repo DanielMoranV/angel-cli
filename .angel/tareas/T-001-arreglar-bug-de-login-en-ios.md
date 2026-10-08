@@ -2,7 +2,7 @@
 id: "T-001"
 title: "Arreglar bug de login en iOS"
 type: "bug"
-status: "activa"
+status: "completada"
 created_at: "2026-10-08"
 updated_at: "2026-10-08"
 dependencies: [] # IDs de otras tareas si aplica

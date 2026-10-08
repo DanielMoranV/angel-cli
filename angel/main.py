@@ -161,5 +161,83 @@ def new_task(
     
     console.print(f"[green]✔ Tarea {next_id} creada exitosamente:[/green] {filepath.name}")
 
+@app.command(name="close")
+def close_task(
+    task_id: str = typer.Argument(..., help="ID de la tarea a cerrar (ej. T-001)")
+):
+    """
+    Marca una tarea como completada y actualiza su fecha.
+    """
+    import datetime
+    import re
+    
+    target_dir = Path.cwd() / ".angel"
+    tareas_dir = target_dir / "tareas"
+    
+    if not tareas_dir.exists():
+        console.print("[red]Angel no está inicializado aquí.[/red]")
+        raise typer.Exit(code=1)
+        
+    target_file = None
+    for md_file in tareas_dir.glob("*.md"):
+        if task_id.upper() in md_file.name.upper():
+            target_file = md_file
+            break
+            
+    if not target_file:
+        console.print(f"[red]No se encontró ninguna tarea con el ID {task_id}[/red]")
+        raise typer.Exit(code=1)
+        
+    content = target_file.read_text(encoding="utf-8")
+    
+    # Reemplazar estado
+    new_content = re.sub(r'status:\s*".*"', 'status: "completada"', content)
+    today = datetime.date.today().isoformat()
+    new_content = re.sub(r'updated_at:\s*".*"', f'updated_at: "{today}"', new_content)
+    
+    target_file.write_text(new_content, encoding="utf-8")
+    console.print(f"[green]✔ Tarea {task_id} marcada como completada exitosamente.[/green]")
+
+@app.command(name="handoff")
+def handoff(
+    task_id: str = typer.Argument(..., help="ID de la tarea para generar el paquete de contexto")
+):
+    """
+    Genera un paquete de contexto (prompt) para continuar la tarea en otro LLM o chat.
+    """
+    from rich.panel import Panel
+    
+    target_dir = Path.cwd() / ".angel"
+    tareas_dir = target_dir / "tareas"
+    
+    target_file = None
+    if tareas_dir.exists():
+        for md_file in tareas_dir.glob("*.md"):
+            if task_id.upper() in md_file.name.upper():
+                target_file = md_file
+                break
+            
+    if not target_file:
+        console.print(f"[red]No se encontró la tarea {task_id}[/red]")
+        raise typer.Exit(code=1)
+        
+    perfil_file = target_dir / "perfil.yaml"
+    perfil_content = perfil_file.read_text(encoding="utf-8") if perfil_file.exists() else "Sin perfil."
+    task_content = target_file.read_text(encoding="utf-8")
+    
+    handoff_text = f"""[INICIO DE HANDOFF]
+Por favor, actúa bajo el framework Angel. Retomaremos esta tarea:
+
+--- PERFIL DEL PROYECTO ---
+{perfil_content}
+
+--- ESTADO DE LA TAREA ({task_id}) ---
+{task_content}
+
+Instrucción: Confirma que entiendes el objetivo y sugiere el siguiente paso técnico.
+[FIN DE HANDOFF]"""
+    
+    console.print(Panel(handoff_text, title="Copia y pega este texto en tu nuevo LLM", border_style="blue"))
+
 if __name__ == "__main__":
     app()
