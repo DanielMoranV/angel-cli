@@ -1,23 +1,22 @@
 project:
-  name: "NombreDelProyecto"
-  description: "Descripción breve de lo que hace el proyecto."
-
+  name: NombreDelProyecto
+  description: Descripción breve de lo que hace el proyecto.
 stack:
-  backend: []
+  backend:
+  - Python
+  - Typer CLI
   frontend: []
-  package_managers: []
-
+  package_managers:
+  - pip/poetry/hatch
 conventions:
   language:
-    code: "English"
-    commits: "English"
-    ui_and_docs: "Español"
+    code: English
+    commits: English
+    ui_and_docs: Español
   architecture:
-    - "Directorio principal: src/"
-
+  - 'Directorio principal: src/'
 rules:
-  - "Escribe aquí las reglas de negocio o seguridad específicas de este proyecto."
-
+- Escribe aquí las reglas de negocio o seguridad específicas de este proyecto.
 commands:
-  test: "echo 'Comando de test no configurado'"
-  build: "echo 'Comando de build no configurado'"
+  test: echo 'Comando de test no configurado'
+  build: echo 'Comando de build no configurado'

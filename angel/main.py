@@ -423,5 +423,18 @@ def scan_project():
          
     console.print("\n[cyan]El archivo .angel/perfil.yaml ha sido actualizado.[/cyan]")
 
+@app.command(name="mcp")
+def run_mcp_server():
+    """
+    Inicia el servidor MCP de Angel para integración nativa con IDEs (Antigravity, Cursor, etc.)
+    """
+    try:
+        from angel.mcp_server import mcp
+        console.print("[green]Iniciando Servidor MCP de Angel...[/green]", err=True)
+        mcp.run()
+    except ImportError:
+        console.print("[red]Falta el paquete 'mcp'. Instala con: pip install mcp[/red]")
+        raise typer.Exit(code=1)
+
 if __name__ == "__main__":
     app()
