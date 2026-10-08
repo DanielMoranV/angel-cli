@@ -18,54 +18,58 @@ Con Angel, la **fuente de la verdad deja de ser la memoria del LLM y pasa a ser 
 - 🗂️ **Estado Determínista (YAML + Markdown):** Gestiona tareas con IDs autoincrementales, estado (`activa`, `bloqueada`, `completada`) y frontmatter estructurado.
 - 🔄 **Handoffs (Transferencias):** Transfiere todo el contexto de una tarea compleja de un LLM a otro (ej. de ChatGPT a Claude) con un solo comando.
 - 🔒 **Validación por Git SHA:** Angel comprueba si las "memorias" que generó la IA sobre tu código están obsoletas usando un cruce con el historial de tu repositorio (`git diff`).
-- 🎨 **Interfaz CLI Amigable:** Construido con Typer y Rich para dar feedback visual, tablas y alertas directamente en la terminal.
+- 🤖 **Servidor MCP Nativo:** Angel actúa como un servidor *Model Context Protocol*, exponiendo herramientas nativas directamente al cerebro de tu IA (Cursor, Antigravity, etc.).
+- 📡 **Escáner de Stack:** Infiere automáticamente los lenguajes, frameworks y gestores de paquetes de tu proyecto para dárselos a conocer a la IA.
 
 ---
 
 ## 🚀 Instalación
 
-Por el momento, puedes instalar el paquete de forma global usando `pip` o `pipx`:
+Por el momento, puedes instalar el paquete de forma global usando `pip`:
 
 ```bash
 git clone git@github.com:DanielMoranV/angel-cli.git
 cd angel-cli
 pip install -e .
+# Si quieres usar la integración nativa con IDEs, asegúrate de instalar las dependencias:
+pip install mcp
 ```
 
 *Nota: Requiere Python 3.9 o superior y Git instalado en tu sistema.*
 
 ---
 
-## 🛠️ Uso y Comandos
+## 🛠️ Uso y Comandos CLI
 
-### 1. Inicializar un Proyecto
+### 1. Inicializar y Escanear un Proyecto
 Ve a cualquier repositorio donde quieras trabajar con IA y ejecuta:
 ```bash
 angel init
+angel scan
 ```
-Esto creará una carpeta oculta `.angel/` con las plantillas necesarias (`ANGEL.md`, `perfil.yaml`) y subcarpetas para `tareas/` y `modulos/`.
+Esto creará una carpeta oculta `.angel/`, escaneará tu código (detectando si usas React, Go, Python, etc.) y dejará listo tu `perfil.yaml`.
 
 ### 2. Crear una Tarea
-En lugar de decirle a la IA "haz esto", formaliza la instrucción:
+Formaliza la instrucción para tu IA en lugar de hacer peticiones al aire:
 ```bash
 angel new-task --title "Arreglar bug de login en iOS" --task-type bug
 ```
 *(Generará automáticamente el archivo `.angel/tareas/T-001-arreglar-bug-de-login-en-ios.md`)*
 
 ### 3. Revisar el Estado
-Para que tú y la IA sepan en qué están trabajando y qué memorias están desactualizadas:
+Para saber qué tareas están activas y qué módulos están desactualizados:
 ```bash
 angel status
 ```
 
 ### 4. Actualizar Memoria de Módulo
-Cuando le pides a la IA que documente cómo funciona un módulo (`auth`), Angel anota el hash del commit actual. Si más adelante quieres forzar la actualización:
+Fuerza la actualización de la memoria de un módulo vinculándola al commit actual (`HEAD`):
 ```bash
 angel update-module auth
 ```
 
 ### 5. Continuar en Otro Chat (Handoff)
-Si la ventana de contexto de la IA está a punto de explotar o quieres cambiar de proveedor:
+Si la ventana de contexto de la IA está a punto de explotar o quieres cambiar de proveedor (ej. llevarte la tarea a ChatGPT):
 ```bash
 angel handoff T-001
 ```
@@ -75,17 +79,27 @@ angel handoff T-001
 ```bash
 angel close T-001
 ```
-*(Marca la tarea como completada para que desaparezca del radar principal).*
 
 ---
 
-## 🤖 Integración con Clientes IA
+## 🔌 Integración nativa con IDEs (Servidor MCP)
 
-Angel está diseñado para funcionar como **núcleo neutro**. Dependiendo de la herramienta que uses, la integración es sutilmente distinta:
+Angel incluye un servidor MCP integrado (`FastMCP`) que expone herramientas directamente a tu IA. En lugar de ejecutar comandos en la terminal a mano, tu IDE (como **Antigravity**, **Claude Desktop** o **Cursor**) puede crear tareas y leer estados como si fueran sus propias funciones.
 
-- **Claude Code / CLI Agents:** Simplemente añade a tu prompt de sistema: *"Sigue las instrucciones en `.angel/ANGEL.md` y usa el comando `angel status` antes de proponer cambios"*.
-- **IDE Agents (Antigravity / Cursor):** Crea un archivo `.cursorrules` o equivalente que apunte a `.angel/ANGEL.md` como la fuente central de verdad.
-- **ChatGPT Web:** Usa la terminal para correr `angel handoff <id>` y pega el resultado para empezar a hablar con el contexto perfecto.
+Para configurarlo, solo debes añadir Angel a tu archivo de configuración de MCP. Por ejemplo, en Antigravity (en `~/.gemini/config/mcp_config.json` o en tu plugin local):
+
+```json
+{
+  "mcpServers": {
+    "angel": {
+      "command": "angel",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+Al hacerlo, la IA detectará automáticamente herramientas como `create_angel_task`, `get_angel_status`, etc.
 
 ---
 
@@ -94,5 +108,5 @@ Angel está diseñado para funcionar como **núcleo neutro**. Dependiendo de la 
 - [x] **Fase 1:** Plantillas base y diseño agnóstico.
 - [x] **Fase 2:** Comandos de ciclo de vida (`init`, `new-task`, `status`, `handoff`, `close`).
 - [x] **Fase 3:** Validación inteligente de obsolescencia usando Git SHAs.
-- [ ] **Fase 4:** Escáner Automático (`angel scan`) para inferir lenguajes y arquitecturas al inicializar.
-- [ ] **Fase 5:** Adaptadores nativos para IDEs y Servidor MCP (Model Context Protocol).
+- [x] **Fase 4:** Escáner Automático (`angel scan`) de lenguajes y arquitecturas.
+- [x] **Fase 5:** Adaptadores nativos para IDEs y Servidor MCP (Model Context Protocol).
