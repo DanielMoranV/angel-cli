@@ -102,5 +102,64 @@ def status(
         
     console.print(table)
 
+@app.command(name="new-task")
+def new_task(
+    title: str = typer.Option(..., prompt="Título de la tarea"),
+    task_type: str = typer.Option("feature", prompt="Tipo (bug, feature, refactor, docs)"),
+):
+    """
+    Crea una nueva tarea en .angel/tareas/ con un ID autoincremental.
+    """
+    import datetime
+    import re
+    
+    target_dir = Path.cwd() / ".angel"
+    if not target_dir.exists():
+        console.print("[red]Angel no está inicializado. Ejecuta 'angel init' primero.[/red]")
+        raise typer.Exit(code=1)
+        
+    tareas_dir = target_dir / "tareas"
+    
+    # Calcular el próximo ID
+    max_id = 0
+    if tareas_dir.exists():
+        for md_file in tareas_dir.glob("T-*.md"):
+            match = re.search(r"T-(\d+)", md_file.name)
+            if match:
+                num = int(match.group(1))
+                if num > max_id:
+                    max_id = num
+                
+    next_id_num = max_id + 1
+    next_id = f"T-{next_id_num:03d}"
+    
+    # Crear slug para el nombre del archivo
+    slug = re.sub(r'[^a-z0-9]+', '-', title.lower()).strip('-')
+    if not slug:
+        slug = "tarea"
+    filename = f"{next_id}-{slug}.md"
+    filepath = tareas_dir / filename
+    
+    # Leer plantilla
+    template_path = target_dir / "PLANTILLA_TAREA.md"
+    if not template_path.exists():
+        console.print("[red]No se encontró la plantilla .angel/PLANTILLA_TAREA.md[/red]")
+        raise typer.Exit(code=1)
+        
+    content = template_path.read_text(encoding="utf-8")
+    
+    # Reemplazar valores básicos
+    today = datetime.date.today().isoformat()
+    content = content.replace('id: "T-001"', f'id: "{next_id}"')
+    content = content.replace('title: "Breve descripción de la tarea"', f'title: "{title}"')
+    content = content.replace('type: "bug | feature | refactor | docs"', f'type: "{task_type}"')
+    content = content.replace('status: "activa | pausada | bloqueada | completada"', 'status: "activa"')
+    content = content.replace('created_at: "YYYY-MM-DD"', f'created_at: "{today}"')
+    content = content.replace('updated_at: "YYYY-MM-DD"', f'updated_at: "{today}"')
+    
+    filepath.write_text(content, encoding="utf-8")
+    
+    console.print(f"[green]✔ Tarea {next_id} creada exitosamente:[/green] {filepath.name}")
+
 if __name__ == "__main__":
     app()
