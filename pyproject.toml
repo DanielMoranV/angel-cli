@@ -17,3 +17,6 @@ dependencies = [
 
 [project.scripts]
 angel = "angel.main:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["angel"]
