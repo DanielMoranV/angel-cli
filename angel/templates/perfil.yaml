@@ -1,0 +1,23 @@
+project:
+  name: "NombreDelProyecto"
+  description: "Descripción breve de lo que hace el proyecto."
+
+stack:
+  backend: []
+  frontend: []
+  package_managers: []
+
+conventions:
+  language:
+    code: "English"
+    commits: "English"
+    ui_and_docs: "Español"
+  architecture:
+    - "Directorio principal: src/"
+
+rules:
+  - "Escribe aquí las reglas de negocio o seguridad específicas de este proyecto."
+
+commands:
+  test: "echo 'Comando de test no configurado'"
+  build: "echo 'Comando de build no configurado'"
