@@ -6,6 +6,19 @@ from rich.console import Console
 app = typer.Typer(help="Angel CLI - Framework de Agentes IA")
 console = Console()
 
+def get_target_dir() -> Path:
+    import os
+    from pathlib import Path
+    custom_dir = os.environ.get("ANGEL_DIR")
+    if custom_dir:
+        return Path.cwd() / custom_dir
+    # Auto-detect Docs/IA fallback
+    docs_ia = Path.cwd() / "Docs" / "IA"
+    if docs_ia.exists() and docs_ia.is_dir():
+        return docs_ia
+    return Path.cwd() / ".angel"
+
+
 # Ruta base donde se instaló el paquete para buscar los templates
 PACKAGE_DIR = Path(__file__).parent
 TEMPLATES_DIR = PACKAGE_DIR / "templates"
@@ -17,22 +30,27 @@ def init(
     """
     Inicializa Angel en el repositorio actual copiando las plantillas a .angel/
     """
-    target_dir = Path.cwd() / ".angel"
+    target_dir = get_target_dir()
     
     if target_dir.exists():
         if not force:
-            console.print("[yellow]La carpeta .angel/ ya existe. Usa --force para sobrescribir.[/yellow]")
+            console.print("[yellow]La carpeta de destino ya existe. Usa --force para sobrescribir.[/yellow]")
             raise typer.Exit(code=1)
         else:
+            resolved_target = target_dir.resolve()
+            resolved_cwd = Path.cwd().resolve()
+            if resolved_target in (resolved_cwd, Path.home().resolve(), Path("/").resolve()):
+                console.print("[red]Error de seguridad: No se puede eliminar el directorio destino ya que coincide con la raíz o el proyecto.[/red]")
+                raise typer.Exit(code=1)
             shutil.rmtree(target_dir)
-            console.print("[yellow]Carpeta .angel/ anterior eliminada.[/yellow]")
+            console.print("[yellow]Carpeta de destino anterior eliminada.[/yellow]")
 
     try:
         shutil.copytree(TEMPLATES_DIR, target_dir)
         
         # Crear subdirectorios para estado dinámico
-        (target_dir / "tareas").mkdir(exist_ok=True)
-        (target_dir / "modulos").mkdir(exist_ok=True)
+        (target_dir / "TAREAS" if (target_dir / "TAREAS").exists() else target_dir / "tareas").mkdir(exist_ok=True)
+        (target_dir / "MODULOS" if (target_dir / "MODULOS").exists() else target_dir / "modulos").mkdir(exist_ok=True)
         
         console.print("[green]✔ Angel inicializado correctamente en .angel/[/green]")
         console.print("Revisa y configura [bold].angel/perfil.yaml[/bold] con los datos de tu proyecto.")
@@ -52,12 +70,12 @@ def status(
     import subprocess
     from rich.table import Table
 
-    target_dir = Path.cwd() / ".angel"
+    target_dir = get_target_dir()
     if not target_dir.exists():
         console.print("[red]Angel no está inicializado aquí. Ejecuta 'angel init' primero.[/red]")
         raise typer.Exit(code=1)
         
-    tareas_dir = target_dir / "tareas"
+    tareas_dir = target_dir / "TAREAS" if (target_dir / "TAREAS").exists() else target_dir / "tareas"
     
     tareas = []
     if tareas_dir.exists():
@@ -103,7 +121,7 @@ def status(
         console.print(table)
 
     # REVISIÓN DE MÓDULOS
-    modulos_dir = target_dir / "modulos"
+    modulos_dir = target_dir / "MODULOS" if (target_dir / "MODULOS").exists() else target_dir / "modulos"
     modulos = []
     if modulos_dir.exists():
         for md_file in modulos_dir.glob("*.md"):
@@ -157,6 +175,7 @@ def status(
 def new_task(
     title: str = typer.Option(..., prompt="Título de la tarea"),
     task_type: str = typer.Option("feature", prompt="Tipo (bug, feature, refactor, docs)"),
+    custom_id: str = typer.Option(None, "--id", help="ID semántico opcional (ej. feat-login)"),
 ):
     """
     Crea una nueva tarea en .angel/tareas/ con un ID autoincremental.
@@ -164,32 +183,46 @@ def new_task(
     import datetime
     import re
     
-    target_dir = Path.cwd() / ".angel"
+    target_dir = get_target_dir()
     if not target_dir.exists():
         console.print("[red]Angel no está inicializado. Ejecuta 'angel init' primero.[/red]")
         raise typer.Exit(code=1)
         
-    tareas_dir = target_dir / "tareas"
+    tareas_dir = target_dir / "TAREAS" if (target_dir / "TAREAS").exists() else target_dir / "tareas"
     
-    # Calcular el próximo ID
-    max_id = 0
-    if tareas_dir.exists():
-        for md_file in tareas_dir.glob("T-*.md"):
-            match = re.search(r"T-(\d+)", md_file.name)
-            if match:
-                num = int(match.group(1))
-                if num > max_id:
-                    max_id = num
-                
-    next_id_num = max_id + 1
-    next_id = f"T-{next_id_num:03d}"
-    
-    # Crear slug para el nombre del archivo
-    slug = re.sub(r'[^a-z0-9]+', '-', title.lower()).strip('-')
-    if not slug:
-        slug = "tarea"
-    filename = f"{next_id}-{slug}.md"
-    filepath = tareas_dir / filename
+    if custom_id:
+        if not re.match(r"^[a-zA-Z0-9_\-]+$", custom_id):
+            console.print("[red]Error: El ID personalizado solo puede contener letras, números, guiones y guiones bajos.[/red]")
+            raise typer.Exit(code=1)
+        next_id = custom_id
+        filename = f"{custom_id}.md"
+    else:
+        # Calcular el próximo ID
+        max_id = 0
+        if tareas_dir.exists():
+            for md_file in tareas_dir.glob("T-*.md"):
+                match = re.search(r"T-(\d+)", md_file.name)
+                if match:
+                    num = int(match.group(1))
+                    if num > max_id:
+                        max_id = num
+                    
+        import uuid
+        short_hex = uuid.uuid4().hex[:4]
+        next_id_num = max_id + 1
+        next_id = f"T-{next_id_num:03d}-{short_hex}"
+        
+        # Crear slug para el nombre del archivo
+        slug = re.sub(r'[^a-z0-9]+', '-', title.lower()).strip('-')
+        if not slug:
+            slug = "tarea"
+        filename = f"{next_id}-{slug}.md"
+    filepath = (tareas_dir / filename).resolve()
+    try:
+        filepath.relative_to(tareas_dir.resolve())
+    except ValueError:
+        console.print("[red]Error: Ruta de archivo no permitida fuera del directorio de tareas.[/red]")
+        raise typer.Exit(code=1)
     
     # Leer plantilla
     template_path = target_dir / "PLANTILLA_TAREA.md"
@@ -199,16 +232,18 @@ def new_task(
         
     content = template_path.read_text(encoding="utf-8")
     
-    # Reemplazar valores básicos
+    import frontmatter
     today = datetime.date.today().isoformat()
-    content = content.replace('id: "T-001"', f'id: "{next_id}"')
-    content = content.replace('title: "Breve descripción de la tarea"', f'title: "{title}"')
-    content = content.replace('type: "bug | feature | refactor | docs"', f'type: "{task_type}"')
-    content = content.replace('status: "activa | pausada | bloqueada | completada"', 'status: "activa"')
-    content = content.replace('created_at: "YYYY-MM-DD"', f'created_at: "{today}"')
-    content = content.replace('updated_at: "YYYY-MM-DD"', f'updated_at: "{today}"')
     
-    filepath.write_text(content, encoding="utf-8")
+    post = frontmatter.load(template_path)
+    post.metadata["id"] = next_id
+    post.metadata["title"] = title
+    post.metadata["type"] = task_type
+    post.metadata["status"] = "activa"
+    post.metadata["created_at"] = today
+    post.metadata["updated_at"] = today
+    
+    filepath.write_text(frontmatter.dumps(post), encoding="utf-8")
     
     console.print(f"[green]✔ Tarea {next_id} creada exitosamente:[/green] {filepath.name}")
 
@@ -222,8 +257,8 @@ def close_task(
     import datetime
     import re
     
-    target_dir = Path.cwd() / ".angel"
-    tareas_dir = target_dir / "tareas"
+    target_dir = get_target_dir()
+    tareas_dir = target_dir / "TAREAS" if (target_dir / "TAREAS").exists() else target_dir / "tareas"
     
     if not tareas_dir.exists():
         console.print("[red]Angel no está inicializado aquí.[/red]")
@@ -239,14 +274,12 @@ def close_task(
         console.print(f"[red]No se encontró ninguna tarea con el ID {task_id}[/red]")
         raise typer.Exit(code=1)
         
-    content = target_file.read_text(encoding="utf-8")
-    
-    # Reemplazar estado
-    new_content = re.sub(r'status:\s*".*"', 'status: "completada"', content)
+    import frontmatter
     today = datetime.date.today().isoformat()
-    new_content = re.sub(r'updated_at:\s*".*"', f'updated_at: "{today}"', new_content)
-    
-    target_file.write_text(new_content, encoding="utf-8")
+    post = frontmatter.load(target_file)
+    post.metadata["status"] = "completada"
+    post.metadata["updated_at"] = today
+    target_file.write_text(frontmatter.dumps(post), encoding="utf-8")
     console.print(f"[green]✔ Tarea {task_id} marcada como completada exitosamente.[/green]")
 
 @app.command(name="handoff")
@@ -258,8 +291,8 @@ def handoff(
     """
     from rich.panel import Panel
     
-    target_dir = Path.cwd() / ".angel"
-    tareas_dir = target_dir / "tareas"
+    target_dir = get_target_dir()
+    tareas_dir = target_dir / "TAREAS" if (target_dir / "TAREAS").exists() else target_dir / "tareas"
     
     target_file = None
     if tareas_dir.exists():
@@ -300,8 +333,8 @@ def update_module(
     import subprocess
     import re
     
-    target_dir = Path.cwd() / ".angel"
-    modulos_dir = target_dir / "modulos"
+    target_dir = get_target_dir()
+    modulos_dir = target_dir / "MODULOS" if (target_dir / "MODULOS").exists() else target_dir / "modulos"
     
     if not modulos_dir.exists():
         console.print("[red]Angel no está inicializado o falta carpeta modulos.[/red]")
@@ -323,9 +356,10 @@ def update_module(
         console.print("[red]No se pudo obtener el commit actual. ¿Estás en un repo Git?[/red]")
         raise typer.Exit(code=1)
         
-    content = target_file.read_text(encoding="utf-8")
-    new_content = re.sub(r'git_sha:\s*".*"', f'git_sha: "{head_sha}"', content)
-    target_file.write_text(new_content, encoding="utf-8")
+    import frontmatter
+    post = frontmatter.load(target_file)
+    post.metadata["git_sha"] = head_sha
+    target_file.write_text(frontmatter.dumps(post), encoding="utf-8")
     
     console.print(f"[green]✔ Módulo {target_file.name} actualizado al commit {head_sha[:7]}[/green]")
 
@@ -338,10 +372,11 @@ def scan_project():
     import json
     
     target_dir = Path.cwd()
-    perfil_path = target_dir / ".angel" / "perfil.yaml"
+    target_angel = get_target_dir()
+    perfil_path = target_angel / "perfil.yaml"
     
     if not perfil_path.exists():
-        console.print("[red]Angel no está inicializado. Ejecuta 'angel init' primero.[/red]")
+        console.print(f"[red]Angel no está inicializado en {target_angel.name}. Ejecuta 'angel init' primero.[/red]")
         raise typer.Exit(code=1)
         
     stack_backend = []
@@ -431,7 +466,7 @@ def scan_project():
     if not (stack_backend or stack_frontend or package_managers):
          console.print("  - [yellow]No se detectaron frameworks conocidos.[/yellow]")
          
-    console.print("\n[cyan]El archivo .angel/perfil.yaml ha sido actualizado.[/cyan]")
+    console.print(f"\n[cyan]El archivo {perfil_path.name} ha sido actualizado en {target_angel.name}/[/cyan]")
 
 @app.command(name="mcp")
 def run_mcp_server():

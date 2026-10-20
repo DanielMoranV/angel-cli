@@ -15,7 +15,7 @@ Con Angel, la **fuente de la verdad deja de ser la memoria del LLM y pasa a ser 
 
 ## ✨ Características Principales
 
-- 🗂️ **Estado Determínista (YAML + Markdown):** Gestiona tareas con IDs autoincrementales, estado (`activa`, `bloqueada`, `completada`) y frontmatter estructurado.
+- 🗂️ **Estado Determinista (YAML + Markdown):** Gestiona tareas con IDs autoincrementales, estado (`activa`, `bloqueada`, `completada`) y frontmatter estructurado.
 - 🔄 **Handoffs (Transferencias):** Transfiere todo el contexto de una tarea compleja de un LLM a otro (ej. de ChatGPT a Claude) con un solo comando.
 - 🔒 **Validación por Git SHA:** Angel comprueba si las "memorias" que generó la IA sobre tu código están obsoletas usando un cruce con el historial de tu repositorio (`git diff`).
 - 🤖 **Servidor MCP Nativo:** Angel actúa como un servidor *Model Context Protocol*, exponiendo herramientas nativas directamente al cerebro de tu IA (Cursor, Antigravity, etc.).
@@ -28,14 +28,14 @@ Con Angel, la **fuente de la verdad deja de ser la memoria del LLM y pasa a ser 
 Por el momento, puedes instalar el paquete de forma global usando `pip`:
 
 ```bash
-git clone git@github.com:DanielMoranV/angel-cli.git
+git clone https://github.com/DanielMoranV/angel-cli.git
 cd angel-cli
 pip install -e .
-# Si quieres usar la integración nativa con IDEs, asegúrate de instalar las dependencias:
-pip install mcp
+# Si quieres usar la integración nativa con IDEs, asegúrate de instalar los extras de mcp:
+pip install -e .[mcp]
 ```
 
-*Nota: Requiere Python 3.9 o superior y Git instalado en tu sistema.*
+*Nota: Requiere Python 3.10 o superior y Git instalado en tu sistema.*
 
 ---
 
